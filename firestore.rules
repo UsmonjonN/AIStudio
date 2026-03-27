@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: leads
+    // Document ID: leadId
+    // Fields:
+    //   - email: string (optional, email format)
+    //   - name: string (optional)
+    //   - company: string (optional)
+    //   - ideaSummary: string (optional)
+    //   - qualificationScore: integer (optional)
+    //   - qualificationSegment: string (optional, enum)
+    //   - status: string (required, enum)
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (required)
+    //   - prototypeUrl: string (optional, uri)
+    //   - productType: string (optional, enum)
+    //
+    // Collection: conversations
+    // Document ID: convId
+    // Fields:
+    //   - leadId: string (required)
+    //   - messages: list of maps (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "usmonbek0756@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidLead(data) {
+      let allowedFields = ['email', 'name', 'company', 'ideaSummary', 'qualificationScore', 'qualificationSegment', 'status', 'createdAt', 'updatedAt', 'prototypeUrl', 'productType'];
+      let requiredFields = ['status', 'createdAt', 'updatedAt'];
+      let validStatuses = ['started', 'clarifying', 'contact_captured', 'generating_prototype', 'prototype_sent', 'follow_up_pending', 'consultant_requested', 'discovery_call_booked', 'converted'];
+      let validSegments = ['high_fit', 'medium_fit', 'low_fit', 'not_qualified'];
+      let validProductTypes = ['web_app', 'mobile_app', 'dashboard', 'integration', 'process', 'other'];
+
+      return data.keys().hasAll(requiredFields) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.status in validStatuses &&
+             (!('qualificationSegment' in data) || data.qualificationSegment in validSegments) &&
+             (!('productType' in data) || data.productType in validProductTypes) &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('prototypeUrl' in data) || isValidUrl(data.prototypeUrl)) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             (!('qualificationScore' in data) || data.qualificationScore is int);
+    }
+
+    function isValidConversation(data) {
+      let allowedFields = ['leadId', 'messages', 'updatedAt'];
+      return data.keys().hasAll(['leadId', 'messages']) &&
+             data.keys().hasOnly(allowedFields) &&
+             data.leadId is string &&
+             data.messages is list &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /leads/{leadId} {
+      // Public can create a lead (starting a conversation)
+      allow create: if isValidLead(request.resource.data);
+      // Only admins can read or update leads
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /conversations/{convId} {
+      // Public can create or update a conversation
+      allow create, update: if isValidConversation(request.resource.data);
+      // Only admins can read or delete conversations
+      allow read, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

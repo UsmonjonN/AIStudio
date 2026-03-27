@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential client captured through the AI Idea-to-MVP Engine.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "Client's email address." },
+        "name": { "type": "string", "description": "Client's full name." },
+        "company": { "type": "string", "description": "Client's company name." },
+        "ideaSummary": { "type": "string", "description": "AI-generated summary of the software idea." },
+        "qualificationScore": { "type": "integer", "description": "Lead score from 0-100." },
+        "qualificationSegment": { "type": "string", "enum": ["high_fit", "medium_fit", "low_fit", "not_qualified"] },
+        "status": { "type": "string", "enum": ["started", "clarifying", "contact_captured", "generating_prototype", "prototype_sent", "follow_up_pending", "consultant_requested", "discovery_call_booked", "converted"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "prototypeUrl": { "type": "string", "format": "uri" },
+        "productType": { "type": "string", "enum": ["web_app", "mobile_app", "dashboard", "integration", "process", "other"] }
+      },
+      "required": ["status", "createdAt", "updatedAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "The full transcript of an AI-led discovery session.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "description": "Reference to the Lead document." },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "bot"] },
+              "text": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["leadId", "messages"]
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection of captured leads."
+    },
+    "/conversations/{convId}": {
+      "schema": "Conversation",
+      "description": "Collection of conversation transcripts."
+    }
+  }
+}
