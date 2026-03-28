@@ -88,15 +88,20 @@ service cloud.firestore {
     match /leads/{leadId} {
       // Public can create a lead (starting a conversation)
       allow create: if isValidLead(request.resource.data);
-      // Only admins can read or update leads
-      allow read, update, delete: if isAdmin();
+      // Public can update scoring & email capture fields during conversation
+      allow update: if isValidLead(request.resource.data) &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+      // Public can read leads (CRM dashboard)
+      allow read: if true;
+      allow delete: if isAdmin();
     }
 
     match /conversations/{convId} {
       // Public can create or update a conversation
       allow create, update: if isValidConversation(request.resource.data);
-      // Only admins can read or delete conversations
-      allow read, delete: if isAdmin();
+      // Public can read conversations (CRM dashboard)
+      allow read: if true;
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
