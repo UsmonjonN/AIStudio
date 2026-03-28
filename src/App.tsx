@@ -85,7 +85,7 @@ function ChatApp() {
         });
         setLeadId(docRef.id);
       } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, path);
+        console.error('Failed to create initial lead:', error instanceof Error ? error.message : String(error));
       }
     };
     createInitialLead();

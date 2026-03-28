@@ -3,7 +3,6 @@ import {
   collection,
   query,
   orderBy,
-  onSnapshot,
   doc,
   updateDoc,
   getDoc,
@@ -79,22 +78,40 @@ function getRecommendedAction(lead: Lead, conversation?: Conversation): string {
   return 'Continue monitoring conversation';
 }
 
-/** Subscribe to all leads in real-time. Returns unsubscribe function. */
-export function subscribeToLeads(callback: (leads: Lead[]) => void): () => void {
-  const q = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snap) => {
-    const leads = snap.docs.map((d) => mapLeadDoc(d as any));
-    callback(leads);
-  });
+/** Poll leads every 15 s. Returns a stop function. */
+export function subscribeToLeads(callback: (leads: Lead[]) => void, onError?: (err: Error) => void): () => void {
+  let cancelled = false;
+  const load = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'leads'), orderBy('createdAt', 'desc')));
+      if (!cancelled) callback(snap.docs.map((d) => mapLeadDoc(d as any)));
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error('Failed to load leads:', e.message);
+      if (!cancelled) onError?.(e);
+    }
+  };
+  load();
+  const id = setInterval(load, 15000);
+  return () => { cancelled = true; clearInterval(id); };
 }
 
-/** Subscribe to all conversations in real-time. Returns unsubscribe function. */
-export function subscribeToConversations(callback: (convos: Conversation[]) => void): () => void {
-  const q = query(collection(db, 'conversations'));
-  return onSnapshot(q, (snap) => {
-    const convos = snap.docs.map((d) => mapConversationDoc(d as any));
-    callback(convos);
-  });
+/** Poll conversations every 15 s. Returns a stop function. */
+export function subscribeToConversations(callback: (convos: Conversation[]) => void, onError?: (err: Error) => void): () => void {
+  let cancelled = false;
+  const load = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'conversations')));
+      if (!cancelled) callback(snap.docs.map((d) => mapConversationDoc(d as any)));
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error('Failed to load conversations:', e.message);
+      if (!cancelled) onError?.(e);
+    }
+  };
+  load();
+  const id = setInterval(load, 15000);
+  return () => { cancelled = true; clearInterval(id); };
 }
 
 /** Join leads with their conversations and compute derived fields. */

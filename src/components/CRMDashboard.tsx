@@ -81,11 +81,13 @@ export default function CRMDashboard({ onBack }: { onBack: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Data subscriptions
   useEffect(() => {
-    const unsubLeads = subscribeToLeads(setLeads);
-    const unsubConvos = subscribeToConversations(setConversations);
+    const handleError = (err: Error) => setDataError(err.message);
+    const unsubLeads = subscribeToLeads(setLeads, handleError);
+    const unsubConvos = subscribeToConversations(setConversations, handleError);
     return () => { unsubLeads(); unsubConvos(); };
   }, []);
 
@@ -155,6 +157,11 @@ export default function CRMDashboard({ onBack }: { onBack: () => void }) {
       </header>
 
       <main className="flex-1 overflow-y-auto p-8">
+        {dataError && (
+          <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-medium">
+            Failed to load CRM data: {dataError}
+          </div>
+        )}
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatCard icon={Users} label="Total Leads" value={stats.totalLeads} color="bg-srp-teal/10 text-srp-teal" />
