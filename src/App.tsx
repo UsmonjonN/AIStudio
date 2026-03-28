@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Sparkles, CheckCircle, ChevronRight, User, Bot, Loader2, Maximize2, RefreshCw, Smartphone, Monitor, Layout } from 'lucide-react';
+import { Send, Sparkles, CheckCircle, ChevronRight, User, Bot, Loader2, Maximize2, RefreshCw, Smartphone, Monitor, Layout, BarChart3 } from 'lucide-react';
 import { getChatResponse, generatePrototype } from './services/geminiService';
 import { db, auth } from './firebase';
-import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, setDoc, updateDoc } from 'firebase/firestore';
 import ErrorBoundary from './components/ErrorBoundary';
+import CRMDashboard from './components/CRMDashboard';
+import { scoreLead } from './services/leadScoringService';
+import type { ConversationMessage } from './types/crm';
 
 enum OperationType {
   CREATE = 'create',
@@ -46,6 +49,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 function ChatApp() {
+  const [view, setView] = useState<'chat' | 'crm'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -81,7 +85,7 @@ function ChatApp() {
         });
         setLeadId(docRef.id);
       } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, path);
+        console.error('Failed to create initial lead:', error instanceof Error ? error.message : String(error));
       }
     };
     createInitialLead();
@@ -147,10 +151,11 @@ function ChatApp() {
 
       if (leadId) {
         const convPath = 'conversations';
+        const allMessages = [...messages, userMessage, botMessage];
         try {
           await setDoc(doc(db, convPath, leadId), {
             leadId,
-            messages: [...messages, userMessage, botMessage].map(m => ({
+            messages: allMessages.map(m => ({
               role: m.role,
               text: m.text,
               timestamp: m.timestamp.toISOString()
@@ -159,6 +164,33 @@ function ChatApp() {
           });
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, convPath);
+        }
+
+        // Auto-score lead after each exchange
+        try {
+          const convMessages: ConversationMessage[] = allMessages.map(m => ({
+            role: m.role === 'user' ? 'user' : 'bot',
+            text: m.text,
+            timestamp: m.timestamp.toISOString()
+          }));
+          const { score, segment } = scoreLead(convMessages);
+          await updateDoc(doc(db, 'leads', leadId), {
+            qualificationScore: score,
+            qualificationSegment: segment,
+            updatedAt: serverTimestamp()
+          });
+        } catch (_) { /* non-critical */ }
+
+        // Detect email in user message and capture it
+        const emailMatch = messageText.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/);
+        if (emailMatch) {
+          try {
+            await updateDoc(doc(db, 'leads', leadId), {
+              email: emailMatch[0],
+              status: 'contact_captured',
+              updatedAt: serverTimestamp()
+            });
+          } catch (_) { /* non-critical */ }
         }
       }
     } catch (error) {
@@ -194,6 +226,10 @@ function ChatApp() {
     });
   };
 
+  if (view === 'crm') {
+    return <CRMDashboard onBack={() => setView('chat')} />;
+  }
+
   return (
     <div className="h-screen bg-srp-bg font-sans text-srp-navy flex flex-col overflow-hidden">
       {/* Header */}
@@ -212,6 +248,13 @@ function ChatApp() {
             <button className="text-xs font-bold text-srp-navy/60 hover:text-srp-teal transition-colors uppercase tracking-widest">Services</button>
             <button className="text-xs font-bold text-srp-navy/60 hover:text-srp-teal transition-colors uppercase tracking-widest">Portfolio</button>
             <button className="text-xs font-bold text-srp-navy/60 hover:text-srp-teal transition-colors uppercase tracking-widest">About</button>
+            <button
+              onClick={() => setView('crm')}
+              className="flex items-center gap-1.5 text-xs font-bold text-srp-teal hover:text-[#008A93] transition-colors uppercase tracking-widest"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              CRM
+            </button>
           </nav>
           <button className="bg-srp-teal text-white px-6 py-2.5 rounded-full text-xs font-bold hover:bg-[#008A93] transition-all shadow-[0_4px_14px_0_rgba(0,163,173,0.39)] hover:shadow-[0_6px_20px_rgba(0,163,173,0.23)] active:scale-95 uppercase tracking-widest">
             Book Consultation

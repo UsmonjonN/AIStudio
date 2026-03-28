@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx firebase:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase --version)",
+      "Bash(npx firebase-tools:*)",
+      "WebFetch(domain:srpsoftware.com)"
+    ]
+  }
+}
