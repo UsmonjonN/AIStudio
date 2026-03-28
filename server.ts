@@ -10,6 +10,8 @@ import {
   testEmailConfiguration 
 } from "./src/services/emailService.js";
 
+// Load .env.local first, then .env
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
