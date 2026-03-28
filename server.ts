@@ -4,7 +4,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import { 
+  sendWelcomeEmail, 
+  sendAdminNotification, 
+  testEmailConfiguration 
+} from "./src/services/emailService.js";
 
+// Load .env.local first, then .env
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +65,104 @@ async function startServer() {
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "AI Idea-to-MVP Engine is running" });
+  });
+
+  // Email test endpoint
+  app.get("/api/email/test", async (req, res) => {
+    try {
+      const isConfigured = await testEmailConfiguration();
+      res.json({ 
+        success: isConfigured, 
+        message: isConfigured 
+          ? "✅ Email configuration is correct" 
+          : "❌ Email configuration failed. Check your SMTP settings."
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false, 
+        message: "Error testing email configuration", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Send welcome email with idea summary
+  app.post("/api/email/send-welcome", async (req, res) => {
+    try {
+      const { email, ideaSummary } = req.body;
+
+      if (!email || !ideaSummary) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Email and idea summary are required" 
+        });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Invalid email format" 
+        });
+      }
+
+      const success = await sendWelcomeEmail(email, ideaSummary);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: "Welcome email sent successfully" 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: "Failed to send email. Check server logs." 
+        });
+      }
+    } catch (error: any) {
+      console.error("Error in send-welcome endpoint:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Error sending email", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Send admin notification
+  app.post("/api/email/send-notification", async (req, res) => {
+    try {
+      const { email, ideaSummary, conversationData } = req.body;
+
+      if (!email || !ideaSummary) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Email and idea summary are required" 
+        });
+      }
+
+      const success = await sendAdminNotification(email, ideaSummary, conversationData);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: "Admin notification sent successfully" 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: "Failed to send notification" 
+        });
+      }
+    } catch (error: any) {
+      console.error("Error in send-notification endpoint:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Error sending notification", 
+        error: error.message 
+      });
+    }
   });
 
   // Vite middleware for development
